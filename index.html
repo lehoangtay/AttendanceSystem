@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống điểm danh sinh viên</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #video { border: 2px solid #000; }
+        #result { margin-top: 20px; font-size: 20px; }
+        #attendanceList { margin-top: 20px; border-collapse: collapse; width: 50%; margin-left: auto; margin-right: auto; }
+        #attendanceList th, #attendanceList td { border: 1px solid #ddd; padding: 8px; }
+        #attendanceList th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Hệ thống điểm danh sinh viên</h1>
+    <video id="video" width="720" height="560" autoplay muted></video>
+    <div id="result">Đang nhận diện...</div>
+    <table id="attendanceList">
+        <thead>
+            <tr>
+                <th>Tên sinh viên</th>
+                <th>Thời gian điểm danh</th>
+            </tr>
+        </thead>
+        <tbody id="attendanceBody"></tbody>
+    </table>
+
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
