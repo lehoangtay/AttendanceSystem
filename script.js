@@ -1,95 +1,106 @@
-console.log("Đang tải face-api.js...");
+console.log("Loading face-api.js...");
 
-// Tải mô hình từ thư mục models
+// Load models from the models directory
 Promise.all([
     faceapi.nets.ssdMobilenetv1.loadFromUri('/models'),
     faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
     faceapi.nets.faceLandmark68Net.loadFromUri('/models')
 ])
     .then(() => {
-        console.log("Tải mô hình thành công!");
+        console.log("Model loaded successfully!");
         startVideo();
     })
-    .catch(err => console.error("Lỗi khi tải mô hình: ", err));
+    .catch(err => console.error("Error loading models: ", err));
 
-// Khởi động video từ webcam
+// Start video from the webcam
 function startVideo() {
     const video = document.getElementById('video');
     if (!video) {
-        console.error("Không tìm thấy thẻ video trong HTML!");
+        console.error("Video element not found in HTML!");
         return;
     }
 
     navigator.mediaDevices
         .getUserMedia({ video: true })
         .then(stream => {
-            console.log("Webcam đã được kích hoạt!");
+            console.log("Webcam activated!");
             video.srcObject = stream;
         })
-        .catch(err => console.error("Lỗi webcam: ", err));
+        .catch(err => console.error("Webcam error: ", err));
 }
 
-// Dữ liệu sinh viên (ảnh mẫu để so sánh)
+// Student data (sample images for comparison)
 async function loadLabeledImages() {
-    const labels = ['SinhVien1', 'SinhVien2']; // Thay bằng tên sinh viên thực tế
-    console.log("Đang tải ảnh mẫu...");
+    const labels = ['Le_Hoang_Tay', 'Ly_Anh_Thi', 'Nguyen_Thien_Quy']; // List of students
+    console.log("Loading sample images...");
+    
     try {
         const results = await Promise.all(
             labels.map(async label => {
                 const descriptions = [];
-                try {
-                    console.log(`Tải ảnh: /images/${label}.jpg`);
-                    const img = await faceapi.fetchImage(`/images/${label}.jpg`);
-                    const detections = await faceapi.detectSingleFace(img)
-                        .withFaceLandmarks()
-                        .withFaceDescriptor();
-
-                    if (!detections) {
-                        console.warn(`Không tìm thấy khuôn mặt trong ảnh: ${label}.jpg`);
-                        return null;
+                for (let i = 1; i <= 5; i++) { // Assume each student has 5 images
+                    try {
+                        const imgUrl = `/images/${label}/${i}.jpg`;
+                        console.log(`Loading image: ${imgUrl}`);
+                        const img = await faceapi.fetchImage(imgUrl);
+                        const detections = await faceapi.detectSingleFace(img)
+                            .withFaceLandmarks()
+                            .withFaceDescriptor();
+                        
+                        if (!detections) {
+                            console.warn(`No face detected in image: ${imgUrl}`);
+                            continue;
+                        }
+                        
+                        descriptions.push(detections.descriptor);
+                        console.log(`Loaded face data from image ${i} of ${label}`);
+                    } catch (err) {
+                        console.error(`Error processing image ${i} of ${label}: `, err);
                     }
-
-                    descriptions.push(detections.descriptor);
-                    console.log(`Đã tải dữ liệu khuôn mặt của ${label}`);
-                    return new faceapi.LabeledFaceDescriptors(label, descriptions);
-                } catch (err) {
-                    console.error(`Lỗi khi xử lý ảnh ${label}: `, err);
-                    return null;
                 }
+
+                if (descriptions.length > 0) {
+                    return new faceapi.LabeledFaceDescriptors(label, descriptions);
+                }
+                return null;
             })
         );
+
         const validResults = results.filter(result => result !== null);
-        console.log(`Số sinh viên tải thành công: ${validResults.length}`);
+        console.log(`Number of students loaded successfully: ${validResults.length}`);
         return validResults;
     } catch (err) {
-        console.error("Lỗi khi tải ảnh mẫu: ", err);
+        console.error("Error loading sample images: ", err);
         return [];
     }
 }
 
-// Quản lý danh sách điểm danh
+// Manage attendance list
 let attendanceRecords = [];
 
+// Function to update the attendance table
 function updateAttendanceTable(name, timestamp) {
-    const existingRecord = attendanceRecords.find(record => record.name === name);
+    const formattedName = name.split("_").join(" ");
+
+    const existingRecord = attendanceRecords.find(record => record.name === formattedName);
     const tbody = document.getElementById('attendanceBody');
     const resultDiv = document.getElementById('result');
 
     if (!existingRecord) {
-        attendanceRecords.push({ name, timestamp });
+        attendanceRecords.push({ name: formattedName, timestamp });
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${name}</td><td>${timestamp}</td>`;
+        row.innerHTML = `<td>${formattedName}</td><td>${timestamp}</td>`;
         tbody.appendChild(row);
-        resultDiv.innerText = `Sinh viên: ${name} - Điểm danh thành công`;
-        saveAttendance(name, timestamp);
-        console.log(`Đã thêm ${name} vào danh sách điểm danh`);
+        resultDiv.innerText = `Student: ${formattedName} - Attendance recorded successfully`;
+        saveAttendance(formattedName, timestamp);
+        console.log(`Added ${formattedName} to the attendance list`);
     } else {
-        resultDiv.innerText = `Sinh viên: ${name} - Đã được điểm danh`;
-        console.log(`${name} đã điểm danh trước đó`);
+        resultDiv.innerText = `Student: ${formattedName} - Already marked present`;
+        console.log(`${formattedName} has already checked in`);
     }
 }
 
-// Gửi dữ liệu điểm danh lên server
+// Send attendance data to the server
 async function saveAttendance(name, timestamp) {
     try {
         const response = await fetch('/save-attendance', {
@@ -97,21 +108,22 @@ async function saveAttendance(name, timestamp) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, timestamp })
         });
-        console.log(`Đã gửi: ${name} điểm danh lúc ${timestamp}`);
+        const data = await response.json();
+        console.log(`Sent: ${name} checked in at ${timestamp} - ${data.message}`);
     } catch (err) {
-        console.error("Lỗi khi gửi dữ liệu điểm danh: ", err);
+        console.error("Error sending attendance data: ", err);
     }
 }
 
-// Nhận diện khuôn mặt
+// Face recognition
 const video = document.getElementById('video');
 if (video) {
     video.addEventListener('play', async () => {
-        console.log("Video bắt đầu chạy, khởi tạo nhận diện...");
+        console.log("Video started, initializing recognition...");
         const labeledFaceDescriptors = await loadLabeledImages();
         if (labeledFaceDescriptors.length === 0) {
-            document.getElementById('result').innerText = "Lỗi: Không có dữ liệu sinh viên!";
-            console.error("Không có dữ liệu sinh viên để nhận diện!");
+            document.getElementById('result').innerText = "Error: No student data available!";
+            console.error("No student data for recognition!");
             return;
         }
 
@@ -125,29 +137,47 @@ if (video) {
 
                 const resultDiv = document.getElementById('result');
                 if (!resultDiv) {
-                    console.error("Không tìm thấy phần tử result trong HTML!");
+                    console.error("Result element not found in HTML!");
                     return;
                 }
 
                 if (detections.length > 0) {
                     const results = detections.map(d => faceMatcher.findBestMatch(d.descriptor));
                     results.forEach((result) => {
-                        const name = result.toString().includes('unknown') ? 'Không nhận diện được' : result.label;
-                        if (name !== 'Không nhận diện được') {
+                        const name = result.toString().includes('unknown') ? 'Unrecognized' : result.label;
+                        if (name !== 'Unrecognized') {
                             const timestamp = new Date().toLocaleString();
                             updateAttendanceTable(name, timestamp);
                         } else {
-                            resultDiv.innerText = 'Không nhận diện được';
+                            resultDiv.innerText = 'Unrecognized face';
                         }
                     });
                 } else {
-                    resultDiv.innerText = 'Không phát hiện khuôn mặt';
+                    resultDiv.innerText = 'No face detected';
                 }
             } catch (err) {
-                console.error("Lỗi khi nhận diện khuôn mặt: ", err);
+                console.error("Error during face recognition: ", err);
             }
         }, 1000);
     });
 } else {
-    console.error("Không tìm thấy thẻ video để gắn sự kiện!");
+    console.error("Video element not found to attach event!");
 }
+
+// Handle Export to Excel button
+document.getElementById('exportExcel').addEventListener('click', async () => {
+    try {
+        const response = await fetch('/export-excel', {
+            method: 'GET'
+        });
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'attendance.xlsx';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error("Error exporting to Excel: ", err);
+    }
+});
